@@ -6,6 +6,7 @@
 - プレフィックスを使用（Fix/Add/Update/Remove/Refactor）
 
 ## ブランチ戦略
+- main: デフォルトブランチ（直接コミット禁止）
 - prod: リリース用ブランチ（直接コミット禁止）
 - develop: 開発用ブランチ（派生ブランチの合流元）
 - feature/*: 新機能開発（developから分岐）
