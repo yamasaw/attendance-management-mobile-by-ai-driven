@@ -1,0 +1,21 @@
+# Git操作ルール
+
+## コミットメッセージ
+- 先頭は英語で機能名や修正内容を記載（例：「Fix: camera access issue」）
+- 本文は日本語で詳細を記述可
+- プレフィックスを使用（Fix/Add/Update/Remove/Refactor）
+
+## ブランチ戦略
+- prod: リリース用ブランチ（直接コミット禁止）
+- develop: 開発用ブランチ（派生ブランチの合流元）
+- feature/*: 新機能開発（developから分岐）
+- fix/*: バグ修正（developから分岐）
+
+## GitHub CLI操作
+- 改行を含むコメントは明示的に\nを使用（例：gh pr comment --body "First line\nSecond line"）
+- 特殊文字を含む場合は$構文を使用（例：gh pr create --title $'Fix: line-break\nissue'）
+
+## 作業ルール
+- コミット前にlintとテスト実行
+- 大きな変更は小さく分割してコミット
+- 機密情報のコミット禁止（.env等）
