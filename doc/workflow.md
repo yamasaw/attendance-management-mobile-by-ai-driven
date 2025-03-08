@@ -1,6 +1,6 @@
 # 勤怠管理モバイルアプリ - 開発ワークフロー
 
-本プロジェクトではテスト駆動開発（TDD）を採用し、品質を担保しながら効率的なモバイルアプリ開発を実現します。Flutterの特性を活かした開発プロセスについて説明します。
+本プロジェクトではテスト駆動開発（TDD）を採用し、品質を担保しながら効率的なモバイルアプリ開発を実現します。Flutterの特性を活かした開発プロセスと共有端末としての考慮点について説明します。
 
 ## 1. 開発の基本原則
 
@@ -34,11 +34,11 @@ flowchart LR
 ### モバイルアプリ開発のライフサイクル
 
 1. **要件分析と設計**: 要件定義、画面設計、アーキテクチャ設計
-2. **環境構築**: Flutter開発環境、CI/CD環境の整備
+2. **環境構築**: Flutter開発環境、CI/CD環境、テスト端末の整備
 3. **機能開発**: TDDアプローチに基づく実装
-4. **テスト**: 単体テスト、ウィジェットテスト、統合テスト
-5. **リリース準備**: ストア向けの準備と提出
-6. **保守・改善**: 継続的なアップデートとバグ修正
+4. **テスト**: 単体テスト、ウィジェットテスト、統合テスト、端末耐久性テスト
+5. **展開準備**: 端末設定とプロビジョニング
+6. **保守・改善**: 継続的なアップデートとモニタリング
 
 ### コード構成
 
@@ -59,6 +59,10 @@ lib/
 │   ├── pages/        # 画面
 │   ├── widgets/      # 再利用可能なウィジェット
 │   └── providers/    # 状態管理プロバイダー
+├── device/           # 共有端末特有の機能
+│   ├── kiosk/        # キオスクモード制御
+│   ├── hardware/     # ハードウェアアクセス
+│   └── monitoring/   # 端末モニタリング
 ├── utils/            # ユーティリティ関数
 └── main.dart         # エントリーポイント
 ```
@@ -71,17 +75,17 @@ lib/
    ```bash
    git checkout develop
    git pull
-   git checkout -b feature/login-screen
+   git checkout -b feature/employee-selection
    ```
 
 2. **モデルの作成**: データ構造とビジネスロジックの定義
    ```dart
-   // lib/data/models/attendance_record.dart
-   class AttendanceRecord {
+   // lib/data/models/employee.dart
+   class Employee {
      final String id;
-     final DateTime timestamp;
-     final AttendanceType type;
-     final String photoUrl;
+     final String name;
+     final String department;
+     final String? photoUrl;
      
      // コンストラクタ、JSONシリアライズなど
    }
@@ -89,20 +93,17 @@ lib/
 
 3. **テストの作成**: 機能のテストケースを先に作成
    ```dart
-   // test/services/attendance_service_test.dart
-   test('出勤記録が正しく作成される', () async {
+   // test/services/employee_service_test.dart
+   test('従業員一覧が正しく取得できる', () async {
      // テストコード
    });
    ```
 
 4. **サービス層の実装**: APIと連携する機能を実装
    ```dart
-   // lib/data/services/attendance_service.dart
-   class AttendanceService {
-     Future<Result<AttendanceRecord>> recordAttendance({
-       required AttendanceType type,
-       required String photoData,
-     }) async {
+   // lib/data/services/employee_service.dart
+   class EmployeeService {
+     Future<Result<List<Employee>>> getEmployees() async {
        // 実装
      }
    }
@@ -110,24 +111,24 @@ lib/
 
 5. **UIの設計と実装**: 画面とウィジェットの実装
    ```dart
-   // lib/presentation/pages/attendance_record_page.dart
-   class AttendanceRecordPage extends StatelessWidget {
+   // lib/presentation/pages/employee_selection_page.dart
+   class EmployeeSelectionPage extends StatelessWidget {
      // 実装
    }
    ```
 
 6. **状態管理の実装**: Riverpodを使った状態管理
    ```dart
-   // lib/presentation/providers/attendance_provider.dart
-   final attendanceProvider = StateNotifierProvider<AttendanceNotifier, AttendanceState>((ref) {
-     return AttendanceNotifier(ref.read(attendanceServiceProvider));
+   // lib/presentation/providers/employee_provider.dart
+   final employeeProvider = StateNotifierProvider<EmployeeNotifier, EmployeeState>((ref) {
+     return EmployeeNotifier(ref.read(employeeServiceProvider));
    });
    ```
 
 7. **ウィジェットテスト**: UIの動作確認
    ```dart
-   // test/pages/attendance_record_page_test.dart
-   testWidgets('カメラボタンをタップすると写真撮影画面が表示される', (tester) async {
+   // test/pages/employee_selection_page_test.dart
+   testWidgets('従業員カードをタップすると勤怠種別選択画面に遷移する', (tester) async {
      // テストコード
    });
    ```
@@ -135,7 +136,7 @@ lib/
 8. **統合テスト**: 一連のフローを実機/エミュレータでテスト
    ```dart
    // integration_test/app_test.dart
-   testWidgets('出勤記録の完全フロー', (tester) async {
+   testWidgets('従業員選択から打刻完了までの一連の流れ', (tester) async {
      // テストコード
    });
    ```
@@ -143,122 +144,167 @@ lib/
 9. **コードレビュー**: PRを作成し、レビューを依頼
    ```bash
    git add .
-   git commit -m "Add attendance record feature"
-   git push origin feature/login-screen
+   git commit -m "Add employee selection feature"
+   git push origin feature/employee-selection
    # GitHub上でPRを作成
    ```
 
 10. **マージ**: レビュー承認後、developブランチにマージ
 
-## 4. モバイル固有の開発ポイント
+## 4. 共有端末特有の開発ポイント
 
-### クロスプラットフォーム対応
+### キオスクモード実装
 
-以下の点に注意して両プラットフォーム（iOS/Android）で一貫した体験を提供します：
+共有端末として常時稼働するためのキオスクモード機能実装：
 
-1. **プラットフォーム固有のコード**: Platform.isIOSなどで条件分岐
+1. **画面常時表示の実装**:
    ```dart
-   if (Platform.isIOS) {
-     // iOS固有の処理
-   } else if (Platform.isAndroid) {
-     // Android固有の処理
-   }
-   ```
-
-2. **ネイティブ機能へのアクセス**: カメラ、位置情報などのプラットフォーム機能へのアクセス方法
-   ```dart
-   // カメラアクセス例
-   final cameras = await availableCameras();
-   final camera = cameras.first;
-   final controller = CameraController(camera, ResolutionPreset.high);
-   await controller.initialize();
-   ```
-
-3. **パーミッション処理**: 必要な権限の要求と管理
-   ```dart
-   // permission_handler パッケージ使用例
-   if (await Permission.camera.request().isGranted) {
-     // カメラ使用可能
-   } else {
-     // 権限がないケースの処理
-   }
-   ```
-
-### ローカルデータ管理
-
-1. **オフライン対応**: Hiveを使ったローカルデータベース
-   ```dart
-   final box = await Hive.openBox<AttendanceRecord>('attendance_records');
-   // データ保存
-   await box.add(record);
-   // データ取得
-   final records = box.values.toList();
-   ```
-
-2. **データ同期**: バックエンドとデータを同期
-   ```dart
-   Future<void> syncAttendanceRecords() async {
-     final localRecords = getUnsyncedRecordsFromLocal();
-     for (final record in localRecords) {
-       await apiClient.uploadRecord(record);
-       await markRecordAsSynced(record);
+   // lib/device/kiosk/screen_manager.dart
+   class ScreenManager {
+     Future<void> keepScreenOn() async {
+       await Wakelock.enable();
+     }
+     
+     Future<void> enterKioskMode() async {
+       if (Platform.isAndroid) {
+         await FlutterKioskMode.enterKioskMode();
+       } else if (Platform.isIOS) {
+         // iOS向けのガイドアクセスモード指示表示
+       }
      }
    }
    ```
 
-## 5. リリースワークフロー
-
-### ビルドバリアントとフレーバー
-
-開発、ステージング、本番環境ごとに異なる設定を使用します：
-
-1. **環境ごとの設定ファイル**:
+2. **ハードウェアボタン制御**:
    ```dart
-   // lib/config/environment.dart
-   enum Environment { development, staging, production }
-   
-   class AppConfig {
-     final Environment env;
-     final String apiUrl;
-     // その他の設定
+   // Android向けにシステムUIの無効化（オプション）
+   @override
+   void initState() {
+     super.initState();
+     if (Platform.isAndroid) {
+       SystemChrome.setEnabledSystemUIMode(
+         SystemUiMode.immersiveSticky,
+       );
+     }
    }
    ```
 
-2. **フレーバーごとのビルド**:
+3. **自動復帰機能**:
+   ```dart
+   // アプリが異常終了した場合の自動再起動
+   // AndroidManifest.xmlに設定
+   // <application
+   //   android:name=".MainApplication"
+   //   ...
+   //   android:persistent="true">
+   ```
+
+### 端末識別と拠点管理
+
+複数端末での展開を考慮した設計：
+
+1. **端末識別子の生成と保存**:
+   ```dart
+   // lib/device/hardware/device_identifier.dart
+   class DeviceIdentifier {
+     Future<String> getOrCreateDeviceId() async {
+       final storage = FlutterSecureStorage();
+       String? deviceId = await storage.read(key: 'device_id');
+       
+       if (deviceId == null) {
+         deviceId = Uuid().v4(); // 新しいUUID生成
+         await storage.write(key: 'device_id', value: deviceId);
+       }
+       
+       return deviceId;
+     }
+   }
+   ```
+
+2. **拠点情報の管理**:
+   ```dart
+   // lib/data/services/location_service.dart
+   class LocationService {
+     Future<void> registerDeviceToLocation({
+       required String deviceId,
+       required String locationId,
+       required String locationName,
+     }) async {
+       // APIへの登録処理
+     }
+     
+     Future<LocationInfo?> getLocationInfo(String deviceId) async {
+       // デバイスに紐づく拠点情報取得
+     }
+   }
+   ```
+
+## 5. 端末展開ワークフロー
+
+### 拠点ごとの端末設定
+
+拠点への端末展開時の設定フロー：
+
+1. **端末の初期セットアップ**:
+   ```
+   1. 端末のOS設定（言語、時刻など）
+   2. アプリのインストール
+   3. 管理者モードで拠点情報を設定
+   4. 端末IDと拠点IDの紐付け
+   5. キオスクモードの有効化
+   ```
+
+2. **設定の自動化**:
    ```bash
-   # 開発環境向けビルド
-   flutter run --flavor development --target lib/main_development.dart
-   
-   # 本番環境向けビルド
-   flutter run --flavor production --target lib/main_production.dart
+   # Android向け自動設定スクリプト例
+   adb shell settings put global stay_on_while_plugged_in 7
+   adb shell am start -n com.example.attendance/com.example.attendance.MainActivity
+   # その他の設定コマンド
    ```
 
-### リリース準備
-
-1. **バージョン管理**: pubspec.yamlのバージョン番号を更新
-   ```yaml
-   version: 1.0.0+1  # バージョン名+ビルド番号
+3. **MDM（Mobile Device Management）連携**:
+   ```
+   1. Android Enterprise / Apple Business Manager への登録
+   2. 企業所有の専用デバイスとして登録
+   3. キオスクポリシーの適用
+   4. アプリの自動更新設定
    ```
 
-2. **リリースブランチ作成**:
-   ```bash
-   git checkout develop
-   git checkout -b release/v1.0.0
-   # 必要なリリース前の修正を実施
+### リモート管理と監視
+
+展開後の端末管理フロー：
+
+1. **リモートモニタリング**:
+   ```dart
+   // lib/device/monitoring/health_reporter.dart
+   class HealthReporter {
+     // 定期的な状態報告
+     void startPeriodicReporting() {
+       Timer.periodic(Duration(hours: 1), (_) {
+         reportDeviceStatus();
+       });
+     }
+     
+     Future<void> reportDeviceStatus() async {
+       final status = await DeviceStatus.collect();
+       await apiClient.reportStatus(status);
+     }
+   }
    ```
 
-3. **リリースビルド**:
-   ```bash
-   # Android AAB生成
-   flutter build appbundle --flavor production --target lib/main_production.dart
-   
-   # iOS アーカイブ作成
-   flutter build ipa --flavor production --target lib/main_production.dart
+2. **リモート設定変更**:
+   ```dart
+   // Firebase Remote Configを使った設定管理
+   final remoteConfig = FirebaseRemoteConfig.instance;
+   await remoteConfig.setConfigSettings(
+     RemoteConfigSettings(
+       fetchTimeout: Duration(minutes: 1),
+       minimumFetchInterval: Duration(hours: 12),
+     ),
+   );
+   await remoteConfig.fetchAndActivate();
+   final syncInterval = remoteConfig.getInt('sync_interval_minutes');
    ```
-
-4. **ストア提出準備**:
-   - Android: Google Play Console
-   - iOS: App Store Connect
 
 ## 6. CI/CD パイプライン
 
@@ -273,12 +319,12 @@ GitHub Actionsを使用して以下のプロセスを自動化します：
 
 2. **developへのマージ時**:
    - 上記に加えて統合テスト
-   - ステージング環境へのデプロイ
-   - Firebase App Distributionで内部テスター向け配布
+   - テスト用APK/IPAのビルド
+   - テスト端末への展開
 
 3. **mainへのマージ時**:
    - リリースビルド
-   - App Store ConnectとGoogle Play Consoleへの自動提出
+   - MDMシステムへの登録
 
 ### GitHub Actions設定例
 
@@ -303,184 +349,81 @@ jobs:
     - run: flutter pub get
     - run: flutter analyze
     - run: flutter test
-    - run: flutter build apk --flavor development
+    - run: flutter build apk --flavor development --debug
     # その他のステップ...
 ```
 
-## 7. プロジェクト管理と進捗追跡
+## 7. トラブルシューティングとメンテナンス
 
-### 作業管理
+### 端末問題の対応フロー
 
-1. **タスク管理**: GitHub Issues または Jira などのタスク管理ツール
-2. **スプリント計画**: 2週間単位のスプリント
-3. **デイリースタンドアップ**: 毎日の進捗確認と課題共有
+現場で発生した問題への対応手順：
 
-### ドキュメント管理
+1. **問題の切り分け**:
+   ```
+   1. アプリの問題か、端末の問題か、ネットワークの問題かを判断
+   2. アプリログの収集
+   3. 環境情報（OS、アプリバージョン、ネットワーク状態）の収集
+   ```
 
-1. **API仕様書**: バックエンドAPIのインターフェース定義
-2. **アーキテクチャ文書**: システム設計とパターンの記録
-3. **UI/UXガイドライン**: デザインシステムとコンポーネント定義
+2. **リモート診断**:
+   ```dart
+   // lib/device/monitoring/diagnostics.dart
+   class DiagnosticsService {
+     Future<DiagnosticsReport> runDiagnostics() async {
+       final report = DiagnosticsReport(
+         appVersion: await PackageInfo.fromPlatform().then((p) => p.version),
+         deviceInfo: await DeviceInfoPlugin().androidInfo,
+         networkStatus: await Connectivity().checkConnectivity(),
+         storageStatus: await checkStorageStatus(),
+         lastSyncTime: await getLastSyncTime(),
+         // その他の診断情報
+       );
+       return report;
+     }
+   }
+   ```
 
-以上のワークフローを遵守することで、高品質なFlutterモバイルアプリケーションを効率的に開発することができます。 
-# 勤怠管理システム - 開発ワークフロー
+3. **OTAアップデート**:
+   ```
+   1. 問題修正を含むアップデートのビルド
+   2. MDMを通じたアップデート配信
+   3. アップデート適用の監視
+   ```
 
-本プロジェクトではテスト駆動開発（TDD）を採用し、品質を担保しながら効率的な開発を実現します。技術スタックの特性を活かした開発プロセスについて説明します。
+### 定期メンテナンス
 
-## 1. 開発の基本原則
+端末の安定稼働のための定期メンテナンス手順：
 
-### TDD（テスト駆動開発）サイクル
+1. **清掃と物理チェック**:
+   ```
+   1. 画面表面の清掃
+   2. 電源接続の確認
+   3. 物理的な損傷チェック
+   ```
 
-本プロジェクトでは「Red-Green-Refactor」のTDDサイクルを基本とします：
+2. **データクリーンアップ**:
+   ```dart
+   // lib/device/maintenance/clean_up.dart
+   class MaintenanceService {
+     Future<void> performScheduledMaintenance() async {
+       // 古いログの削除
+       await cleanupOldLogs();
+       
+       // キャッシュの整理
+       await cleanupCache();
+       
+       // 同期済みオフラインデータの削除
+       await removeProcessedOfflineData();
+     }
+   }
+   ```
 
-1. **Red**: 失敗するテストを書く
-2. **Green**: テストをパスする最小限の実装を行う
-3. **Refactor**: コードをリファクタリングする（テストは引き続き成功する状態を維持）
+3. **ソフトウェア更新**:
+   ```
+   1. OSアップデートの適用（必要に応じて）
+   2. アプリのアップデート
+   3. 設定の再確認
+   ```
 
-```mermaid
-flowchart LR
-    A[テスト作成] -->|失敗| B[最小限の実装]
-    B -->|成功| C[リファクタリング]
-    C --> A
-```
-
-### フィーチャーブランチ戦略
-
-Git操作ルール（`.cursorrules`）に従い、以下のブランチ戦略を採用します：
-
-- `prod`: リリース用ブランチ
-- `develop`: 開発用ブランチ
-- `feature/*`: 新機能開発ブランチ（developから分岐）
-- `fix/*`: バグ修正ブランチ（developから分岐）
-
-## 2. バックエンド開発ワークフロー
-
-### APIエンドポイント開発
-
-1. **テスト定義**: APIの仕様に基づきVitestでテストケースを記述
-2. **ルートハンドラ実装**: Honoフレームワークを使用してAPIエンドポイントを実装
-3. **データアクセス層実装**: kyselyを使用してCloudflare D1へのクエリを実装
-4. **テスト検証**: 単体テストと統合テストで実装を検証
-5. **ドキュメント化**: API仕様のドキュメントを更新
-
-```javascript
-// 1. テスト定義
-test('勤怠記録API: 従業員IDと写真データが与えられたとき、勤怠記録を作成する', async () => {
-  // テストコード
-});
-
-// 2. ルートハンドラ実装
-app.post('/api/attendance', async (c) => {
-  // 実装コード
-});
-```
-
-### データベースマイグレーション
-
-1. **マイグレーションファイル作成**: `wrangler d1 migrations create`でマイグレーションファイルを作成
-2. **スキーマ定義**: マイグレーションファイルにテーブル定義を記述
-3. **テスト環境適用**: ローカル開発環境でマイグレーションを実行
-4. **型定義更新**: kyselyの型定義を更新
-
-## 3. フロントエンド開発ワークフロー
-
-### コンポーネント開発
-
-1. **コンポーネント仕様定義**: 要件に基づきコンポーネントの振る舞いを定義
-2. **テスト作成**: Vitestと@testing-library/reactでコンポーネントテストを作成
-3. **コンポーネント実装**: shadcn uiとTailwind CSSを使用して実装
-4. **VRTテスト**: Playwrightを使用してビジュアルテストを実施
-5. **アクセシビリティテスト**: axeなどのツールでアクセシビリティをチェック
-
-```typescript
-// 1. コンポーネントテスト
-test('カメラコンポーネント: 写真撮影ボタンをクリックするとキャプチャが実行される', async () => {
-  // テストコード
-});
-
-// 2. コンポーネント実装
-const CameraComponent = () => {
-  // 実装コード
-};
-```
-
-### ページ/画面開発
-
-1. **ページ構造設計**: 遷移フローに基づきページ構造を設計
-2. **データフェッチング**: APIとの連携部分を実装
-3. **レイアウト実装**: フルエントデザインに基づくレイアウトを実装
-4. **インタラクション実装**: ユーザー操作に対する反応を実装
-5. **E2Eテスト**: Playwrightでエンドツーエンドテストを実施
-
-## 4. CI/CDパイプライン
-
-各開発フェーズは、GitHub Actionsを使用した自動化されたCI/CDパイプラインと連携します：
-
-1. **コミット前チェック**: huskyとlint-stagedによるローカルでの検証
-2. **PR作成時**: 自動テスト実行とVRT差分レポート生成
-3. **レビュー承認後**: developブランチへのマージ
-4. **定期デプロイ**: テスト環境への自動デプロイ
-5. **リリース**: prodブランチへのマージとCloudflareへのデプロイ
-
-```yaml
-# GitHub Actionsワークフロー例
-name: Test and Deploy
-on: [pull_request, push]
-jobs:
-  test:
-    # テスト実行
-  deploy:
-    # デプロイ処理
-```
-
-## 5. 具体的な機能開発フロー例
-
-### 勤怠記録機能の開発例
-
-1. **機能要件確認**: ビジネス要件書から勤怠記録の仕様を確認
-2. **テスト計画**: 必要なテストケースをリストアップ
-3. **feature/attendance-recordブランチ作成**
-4. **APIテスト作成**: 勤怠記録APIのテストケースを実装
-5. **APIエンドポイント実装**: テストをパスするAPIを実装
-6. **フロントエンドテスト作成**: カメラコンポーネントのテストを実装
-7. **コンポーネント実装**: テストをパスするコンポーネントを実装
-8. **VRTテスト**: ビジュアル検証を実施
-9. **E2Eテスト**: 一連のフローをテスト
-10. **PRの作成とレビュー**: GitHub CLIを使用してPRを作成
-11. **developへのマージ**
-
-## 6. 定例プロセス
-
-### コードレビュー
-
-- PRごとに少なくとも1名のレビューを必須とする
-- レビュー観点：
-  - テストカバレッジ
-  - コード品質
-  - ビジネスロジックの正確性
-  - パフォーマンス
-  - セキュリティ
-
-### 進捗管理
-
-- 毎日のスタンドアップミーティング
-- 週次の振り返りと計画
-- 2週間のスプリント単位で開発を推進
-
-### ドキュメント更新
-
-- APIの変更は直ちにドキュメントに反映
-- コンポーネントの変更はスタイルガイドに反映
-- 重要な設計判断はADR（Architecture Decision Record）として記録
-
-## 7. Cloudflareデプロイプロセス
-
-`.cursorrules`で規定されたCloudflareデプロイ手順に従い、以下のプロセスで本番環境への反映を行います：
-
-1. **テスト環境確認**: すべてのテストが成功していることを確認
-2. **PR作成**: `develop` → `prod`へのPRを作成
-3. **最終レビュー**: 本番投入前の最終確認
-4. **ビルド**: `npm run build`でフロントエンド資材をビルド
-5. **デプロイ**: `wrangler deploy`でCloudflare Workersにデプロイ
-6. **検証**: デプロイ後の動作確認
-
-これらのワークフローを遵守することで、高品質な勤怠管理システムを効率的に開発できます。 
+この開発ワークフローにより、共有端末として安定して動作する高品質な勤怠管理モバイルアプリケーションを効率的に開発・展開・運用することができます。 
